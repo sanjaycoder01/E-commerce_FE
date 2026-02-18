@@ -17,7 +17,7 @@ function RootLayout() {
 
 const router = createBrowserRouter([
   {
-    path: '/login',
+    path: '/',
     element: <RootLayout />,
     children: [
       { index: true, element: <HomePage /> },
