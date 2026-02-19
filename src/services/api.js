@@ -43,6 +43,13 @@ export const createOrder = (body) => productsApi.post("/orders", body)
 export const getOrders = () => productsApi.get("/orders")
 export const getOrderById = (id) => productsApi.get(`/orders/${id}`)
 
+/** Create Razorpay order for checkout. Body: { orderId: "<Order _id>" }. Returns razorpayOrderId, keyId, amount, currency. */
+export const createPaymentOrder = (orderId) =>
+  productsApi.post("/payment/create-order", { orderId })
+
+/** Verify payment after Razorpay success. Body: { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature }. */
+export const verifyPayment = (body) => productsApi.post("/payment/verify", body)
+
 export const getProfile = () => api.get("/profile")
 
 export const updateProfile = (data) => api.patch("/updateprofile", data)

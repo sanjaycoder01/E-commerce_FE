@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useSelector, useDispatch } from "react-redux"
 import Header from "./Header"
-import { getProfile, createOrder, clearCart as clearCartApi } from "../services/api"
+import { getProfile, createOrder, createPaymentOrder, verifyPayment, clearCart as clearCartApi } from "../services/api"
 import { clearCart, selectCartItems } from "../store/cartSlice"
 
 const initialAddress = {
@@ -12,6 +12,20 @@ const initialAddress = {
   city: "",
   state: "",
   pincode: "",
+}
+
+const RAZORPAY_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js"
+
+function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script")
+    script.src = RAZORPAY_SCRIPT
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error("Failed to load Razorpay"))
+    document.body.appendChild(script)
+  })
 }
 
 function profileToAddress(profile) {
@@ -65,23 +79,71 @@ export default function CheckoutPage() {
       return
     }
     setPlacing(true)
-    createOrder({
-      shippingAddress: {
-        fullName: fullName.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-        city: city.trim(),
-        state: state.trim(),
-        pincode: pincode.trim(),
-      },
-    })
+    const addressPayload = {
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      pincode: pincode.trim(),
+    }
+    createOrder({ shippingAddress: addressPayload })
+      .then((res) => {
+        const resData = res?.data?.data ?? res?.data
+        const order = resData?.order ?? resData
+        const orderId = order?._id ?? order?.id
+        if (!orderId) throw new Error("Order ID missing")
+        return createPaymentOrder(orderId).then((payRes) => {
+          const data = payRes?.data?.data ?? payRes?.data
+          return { orderId, ...data }
+        })
+      })
+      .then(({ orderId, razorpayOrderId, keyId, amount, currency }) => {
+        return loadRazorpay().then(() => ({
+          orderId,
+          razorpayOrderId,
+          keyId,
+          amount: amount != null ? Number(amount) : Math.round(total * 100),
+          currency: currency || "INR",
+        }))
+      })
+      .then(({ orderId, razorpayOrderId, keyId, amount, currency }) => {
+        return new Promise((resolve, reject) => {
+          const options = {
+            key: keyId,
+            amount,
+            currency,
+            order_id: razorpayOrderId,
+            name: "E-commerce",
+            handler(res) {
+              resolve({
+                orderId,
+                razorpayOrderId,
+                razorpayPaymentId: res.razorpay_payment_id,
+                razorpaySignature: res.razorpay_signature,
+              })
+            },
+          }
+          const rzp = new window.Razorpay(options)
+          rzp.on("payment.failed", () => reject(new Error("Payment failed")))
+          rzp.open()
+        })
+      })
+      .then(({ orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature }) => {
+        return verifyPayment({
+          orderId,
+          razorpayOrderId,
+          razorpayPaymentId,
+          razorpaySignature,
+        })
+      })
       .then(() => {
         dispatch(clearCart())
         clearCartApi().catch(() => {})
         navigate("/home", { state: { orderPlaced: true } })
       })
       .catch((err) => {
-        setError(err?.response?.data?.message ?? err?.message ?? "Failed to place order")
+        setError(err?.response?.data?.message ?? err?.message ?? "Payment could not be completed")
       })
       .finally(() => setPlacing(false))
   }
