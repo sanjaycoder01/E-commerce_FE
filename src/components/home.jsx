@@ -20,6 +20,7 @@ import {
   normalizeProduct,
 } from "../utils/catalog"
 import Header from "./Header"
+import HomeChat from "./HomeChat"
 
 function ProductGridSkeleton() {
   return (
@@ -314,6 +315,8 @@ export default function HomePage() {
           )}
         </section>
       </main>
+
+      <HomeChat />
     </div>
   )
 }

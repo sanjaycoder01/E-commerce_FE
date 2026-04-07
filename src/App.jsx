@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Outlet, Navigate } from 'react-router-dom'
 import './App.css'
 import LoginForm from './components/login'
 import SignupForm from './components/signup'
@@ -20,12 +20,13 @@ const router = createBrowserRouter([
     path: '/',
     element: <RootLayout />,
     children: [
-      { index: true, element: <HomePage /> },
+      { index: true, element: <Navigate to="/login" replace /> },
+      { path: 'home', element: <HomePage /> },
+      { path: 'login', element: <LoginForm /> },
+      { path: 'signup', element: <SignupForm /> },
       { path: 'product/:id', element: <ProductDetails /> },
       { path: 'bag', element: <BagPage /> },
       { path: 'checkout', element: <CheckoutPage /> },
-      { path: 'login', element: <LoginForm /> },
-      { path: 'signup', element: <SignupForm /> },
     ],
   },
 ])

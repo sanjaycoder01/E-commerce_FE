@@ -111,7 +111,7 @@ export default function BagPage() {
           <div className="rounded-2xl border border-neutral-200 bg-white p-12 text-center">
             <p className="text-neutral-600">Your bag is empty.</p>
             <Link
-              to="/"
+              to="/home"
               className="mt-4 inline-block rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
             >
               Continue shopping
@@ -200,7 +200,7 @@ export default function BagPage() {
                   Checkout
                 </Link>
                 <Link
-                  to="/"
+                  to="/home"
                   className="inline-block text-sm font-medium text-neutral-600 hover:text-neutral-900"
                 >
                   ← Continue shopping

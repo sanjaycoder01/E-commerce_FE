@@ -41,7 +41,6 @@ export default function ProfileModal({ isOpen, onClose }) {
   const [saving, setSaving] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState(null)
-  const [success, setSuccess] = useState(null)
 
   const handleLogout = () => {
     setLoggingOut(true)
@@ -66,7 +65,6 @@ export default function ProfileModal({ isOpen, onClose }) {
   const loadProfile = useCallback(() => {
     setLoading(true)
     setError(null)
-    setSuccess(null)
     getProfile()
       .then((res) => {
         const user = parseProfile(res)
@@ -113,7 +111,6 @@ export default function ProfileModal({ isOpen, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     setError(null)
-    setSuccess(null)
     setSaving(true)
     const payload = {
       name: name.trim() || undefined,
@@ -133,8 +130,7 @@ export default function ProfileModal({ isOpen, onClose }) {
       .then((res) => {
         const updated = parseProfile(res)
         if (updated) setProfile(updated)
-        setSuccess("Profile updated successfully.")
-        loadProfile()
+        onClose()
       })
       .catch((err) => {
         setError(err?.response?.data?.message ?? err?.message ?? "Failed to update profile")
@@ -196,12 +192,6 @@ export default function ProfileModal({ isOpen, onClose }) {
               {error}
             </div>
           )}
-          {success && (
-            <div className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">
-              {success}
-            </div>
-          )}
-
           {!loading && profile && (
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Avatar + read-only meta */}
@@ -239,7 +229,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                       placeholder="Your name"
                     />
                   </label>
-                  <label className="block">
+                  {/* <label className="block">
                     <span className="mb-1 block text-xs font-medium text-neutral-500">Email</span>
                     <input
                       type="email"
@@ -248,7 +238,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                       className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-neutral-900 placeholder-neutral-400 focus:border-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-500"
                       placeholder="you@example.com"
                     />
-                  </label>
+                  </label> */}
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-neutral-500">Phone</span>
                     <input

@@ -1,36 +1,38 @@
 import axios from "axios"
 
-const JWT_STORAGE_KEY = "accessToken"
 const API_URL = import.meta.env.VITE_API_URL
-export const getToken = () => localStorage.getItem(JWT_STORAGE_KEY)
-export const setToken = (token) => {
-  if (token) localStorage.setItem(JWT_STORAGE_KEY, token)
-  else localStorage.removeItem(JWT_STORAGE_KEY)
-}
-
-const attachAuthHeader = (config) => {
-  const token = getToken()
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-}
 
 const api = axios.create({
-  baseURL: `${API_URL}/auth`,
-  withCredentials: true,
-})
-api.interceptors.request.use(attachAuthHeader)
+  baseURL: API_URL,
+  withCredentials: true
+});
 
 const productsApi = axios.create({
   baseURL: `${API_URL}`,
   withCredentials: true,
 })
-productsApi.interceptors.request.use(attachAuthHeader)
 
 const cartApi = axios.create({
   baseURL: `${API_URL}/cart`,
   withCredentials: true,
 })
-cartApi.interceptors.request.use(attachAuthHeader)
+
+/** POST /api/chat — intent routing (LIST_PRODUCTS, cart, order, etc.). Bearer JWT required if your route is protected. */
+const chatApi = axios.create({
+  baseURL: `${API_URL}/api`,
+  withCredentials: true,
+  headers: { "Content-Type": "application/json", Accept: "application/json" },
+})
+
+/**
+ * @param {object} body
+ * @param {string} body.message — user text (drives intent detection)
+ * @param {string} [body.productId]
+ * @param {number} [body.quantity]
+ * @param {string} [body.orderId]
+ * @param {object|string} [body.shippingAddress]
+ */
+export const sendChatMessage = (body) => chatApi.post("/chat", body)
 
 export const getAllProducts = () => productsApi.get("/products/getallproducts")
 

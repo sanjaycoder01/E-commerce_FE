@@ -35,7 +35,7 @@ export default function Header() {
           >
             <Menu className="w-5 h-5 text-neutral-800" strokeWidth={1.5} />
           </button>
-          <Link to="/" className="font-semibold text-neutral-900 tracking-tight text-lg">
+          <Link to="/home" className="font-semibold text-neutral-900 tracking-tight text-lg">
             {profile?.name ?? user?.name}
           </Link>
         </div>

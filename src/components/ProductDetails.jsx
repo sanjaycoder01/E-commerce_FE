@@ -76,7 +76,7 @@ export default function ProductDetails() {
       <Header />
       <main className="max-w-[1400px] mx-auto px-4 md:px-6 pb-12">
         <Link
-          to="/"
+          to="/home"
           className="inline-flex items-center gap-2 mt-6 text-sm font-medium text-neutral-600 hover:text-neutral-900"
         >
           <ArrowLeft className="w-4 h-4" strokeWidth={2} />
