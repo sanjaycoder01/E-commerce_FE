@@ -34,6 +34,14 @@ cartApi.interceptors.request.use(attachAuthHeader)
 
 export const getAllProducts = () => productsApi.get("/products/getallproducts")
 
+/** GET /products/by-category/:name — products in that category (Bearer if required). */
+export const getProductsByCategory = (categoryName) =>
+  productsApi.get(`/products/by-category/${encodeURIComponent(categoryName)}`)
+
+/** GET /category/getcategoryname/:id — returns category document (e.g. { name }). Requires Bearer token if your route is protected. */
+export const getCategoryById = (id) =>
+  productsApi.get(`/category/getcategoryname/${encodeURIComponent(id)}`)
+
 export const getProductById = (id) => productsApi.get(`/products/getproductbyid/${id}`)
 
 export const searchProducts = (query) =>
