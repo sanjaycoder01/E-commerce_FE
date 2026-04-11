@@ -14,3 +14,16 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* Login / signup: strip Vite template #root padding & margins; match body to dark shell */
+html.auth-route,
+body.auth-route {
+  background-color: #09090b;
+}
+
+#root.auth-route {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}

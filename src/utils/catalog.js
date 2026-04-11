@@ -17,6 +17,17 @@ export function extractProductList(payload) {
   return []
 }
 
+/** First image URL from API shapes: `images[]`, or legacy single `image` / `imageUrl`. */
+export function pickPrimaryImage(p) {
+  if (!p || typeof p !== "object") return ""
+  if (Array.isArray(p.images) && p.images.length > 0) {
+    const first = p.images.find((u) => typeof u === "string" && u.trim())
+    if (first) return first.trim()
+  }
+  const single = p.image ?? p.img ?? p.imageUrl ?? p.thumbnail
+  return typeof single === "string" ? single.trim() : ""
+}
+
 export function normalizeProduct(raw) {
   const p = raw?.product || raw
   if (!p) return null
@@ -33,11 +44,20 @@ export function normalizeProduct(raw) {
     if (OBJECT_ID_RE.test(cat.trim())) categoryId = cat.trim()
   }
 
+  const image = pickPrimaryImage(p)
+  if (import.meta.env.DEV) {
+    console.log("[catalog] image field", {
+      name: p.name ?? p._id,
+      image,
+      images: p.images,
+    })
+  }
+
   return {
     id: p._id ?? p.id,
     name: p.name ?? p.title ?? p.productName ?? "Product",
     price: p.price ?? p.priceAmount ?? 0,
-    image: p.image ?? p.img ?? p.imageUrl ?? p.thumbnail ?? "",
+    image,
     category,
     categoryId,
   }
@@ -67,6 +87,14 @@ export function productMatchesCategoryKey(product, key) {
 export function formatPrice(value) {
   if (typeof value === "number" && !Number.isNaN(value)) return value.toFixed(2)
   return String(value ?? "")
+}
+
+/** Hide raw Mongo-style ids from category lines in the catalog UI. */
+export function formatCategoryDisplay(category) {
+  if (!category || typeof category !== "string") return null
+  const t = category.trim()
+  if (OBJECT_ID_RE.test(t)) return null
+  return t
 }
 
 /** Stable fingerprint of category sources on the current product list (for cache invalidation). */

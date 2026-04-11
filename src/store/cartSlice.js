@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit"
+import { pickPrimaryImage } from "../utils/catalog"
 
 const initialState = {
   items: [], // { productId, quantity, product: { id, name, price, image, category } }
@@ -10,8 +11,8 @@ function toCartProduct(p) {
   return {
     id: raw._id ?? raw.id,
     name: raw.name ?? raw.title ?? raw.productName ?? "Product",
-    price: raw.price ?? raw.priceAmount ?? 0,
-    image: raw.image ?? raw.img ?? raw.imageUrl ?? raw.thumbnail ?? "",
+    price: raw.discountPrice ?? raw.price ?? raw.priceAmount ?? 0,
+    image: pickPrimaryImage(raw),
     category: raw.category ?? raw.subcategory ?? raw.type ?? "",
   }
 }

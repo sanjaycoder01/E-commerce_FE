@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Search, X } from "lucide-react"
 import { searchProducts } from "../services/api"
+import { pickPrimaryImage } from "../utils/catalog"
 
 function parseSearchResults(res) {
   const data = res?.data?.data ?? res?.data ?? res
@@ -15,7 +16,7 @@ function normalizeProduct(p) {
     id: p._id ?? p.id,
     name: p.name ?? p.title ?? p.productName ?? "Product",
     price: p.price ?? p.priceAmount ?? 0,
-    image: p.image ?? p.img ?? p.imageUrl ?? p.thumbnail ?? "",
+    image: pickPrimaryImage(p),
     category: p.category ?? p.subcategory ?? p.type ?? "",
   }
 }

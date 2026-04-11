@@ -24,6 +24,56 @@ const chatApi = axios.create({
   headers: { "Content-Type": "application/json", Accept: "application/json" },
 })
 
+const TOKEN_STORAGE_KEY = "accessToken"
+
+let authToken = null
+
+const authClients = [api, productsApi, cartApi, chatApi]
+
+function applyAuthHeader(token) {
+  const value = token ? `Bearer ${token}` : null
+  for (const client of authClients) {
+    if (value) {
+      client.defaults.headers.common.Authorization = value
+    } else {
+      delete client.defaults.headers.common.Authorization
+    }
+  }
+}
+
+export function setToken(token) {
+  if (token) {
+    authToken = token
+    try {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token)
+    } catch {
+      /* ignore */
+    }
+  } else {
+    authToken = null
+    try {
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
+  applyAuthHeader(authToken)
+}
+
+export function getToken() {
+  return authToken
+}
+
+try {
+  const stored = localStorage.getItem(TOKEN_STORAGE_KEY)
+  if (stored) {
+    authToken = stored
+    applyAuthHeader(stored)
+  }
+} catch {
+  /* ignore */
+}
+
 /**
  * @param {object} body
  * @param {string} body.message — user text (drives intent detection)

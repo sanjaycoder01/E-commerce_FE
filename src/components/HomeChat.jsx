@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react"
-import { useDispatch } from "react-redux"
+import { useDispatch, useStore } from "react-redux"
 import { Link, useNavigate } from "react-router-dom"
 import { MessageCircle, Send, X } from "lucide-react"
-import { getCart, getToken, getProductById, sendChatMessage } from "../services/api"
-import { setCart } from "../store/cartSlice"
+import { getCart, getToken, getProductById, sendChatMessage, verifyPayment, clearCart as clearCartApi } from "../services/api"
+import { setCart, clearCart } from "../store/cartSlice"
+import { openRazorpayFromCheckoutReady } from "../utils/razorpayCheckout"
 import ChatCheckoutEmbed from "./ChatCheckoutEmbed"
 
 function parseProductFromApi(res) {
@@ -30,19 +31,54 @@ function getProductListBlock(res) {
 }
 
 /**
- * Cart agent: `{ type: "cart", message, data: { items, totalPrice }, suggestions }` on `res.data`.
+ * Cart agent: `{ type: "cart", message, data: { items, totalPrice }, suggestions }` on `res.data`
+ * (or nested under `res.data.data` when the API wraps the payload).
  */
 function getChatCartAgentBlock(res) {
   const root = res?.data
-  if (!root || typeof root !== "object" || root.type !== "cart") return null
-  const payload = root.data && typeof root.data === "object" ? root.data : {}
+  if (!root || typeof root !== "object") return null
+  const block =
+    root.type === "cart"
+      ? root
+      : root.data && typeof root.data === "object" && root.data.type === "cart"
+        ? root.data
+        : null
+  if (!block || block.type !== "cart") return null
+  const payload = block.data && typeof block.data === "object" ? block.data : {}
   return {
-    message: typeof root.message === "string" ? root.message : "",
+    message: typeof block.message === "string" ? block.message : "",
     data: {
       items: Array.isArray(payload.items) ? payload.items : [],
       totalPrice: payload.totalPrice,
     },
-    suggestions: Array.isArray(root.suggestions) ? root.suggestions : [],
+    suggestions: Array.isArray(block.suggestions) ? block.suggestions : [],
+  }
+}
+
+/**
+ * Payment agent: `{ type: "checkout_ready", message, data: { razorpayOrderId, keyId, amount, currency, orderId }, suggestions }`.
+ */
+function getCheckoutReadyBlock(res) {
+  const root = res?.data
+  if (!root || typeof root !== "object") return null
+  const block =
+    root.type === "checkout_ready"
+      ? root
+      : root.data && typeof root.data === "object" && root.data.type === "checkout_ready"
+        ? root.data
+        : null
+  if (!block || block.type !== "checkout_ready") return null
+  const payload = block.data && typeof block.data === "object" ? block.data : {}
+  return {
+    message: typeof block.message === "string" ? block.message : "",
+    data: {
+      razorpayOrderId: payload.razorpayOrderId,
+      keyId: payload.keyId,
+      amount: payload.amount,
+      currency: payload.currency,
+      orderId: payload.orderId,
+    },
+    suggestions: Array.isArray(block.suggestions) ? block.suggestions : [],
   }
 }
 
@@ -83,6 +119,9 @@ function extractReplyText(res) {
 
   const cartBlock = getChatCartAgentBlock(res)
   if (cartBlock?.message) return cartBlock.message
+
+  const checkoutReady = getCheckoutReadyBlock(res)
+  if (checkoutReady?.message) return checkoutReady.message
 
   const d = res?.data
   if (d == null) return ""
@@ -321,7 +360,7 @@ function ChatProductDetailPanel({ product, onAddToCart }) {
   )
 }
 
-function AssistantSuggestionChips({ suggestions, msg, detailLoadingId, onPick }) {
+function AssistantSuggestionChips({ suggestions, msg, detailLoadingId, onPick, disabledAll }) {
   if (!suggestions?.length) return null
   return (
     <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Suggested actions">
@@ -329,7 +368,7 @@ function AssistantSuggestionChips({ suggestions, msg, detailLoadingId, onPick })
         const isViewDetails = /view\s*details/i.test(s)
         const canViewDetails =
           isViewDetails && msg.products?.length === 1 && !detailLoadingId
-        const disabled = isViewDetails && !canViewDetails
+        const disabled = disabledAll || (isViewDetails && !canViewDetails)
 
         return (
           <button
@@ -347,8 +386,71 @@ function AssistantSuggestionChips({ suggestions, msg, detailLoadingId, onPick })
   )
 }
 
+/** Append assistant bubble(s) from POST /api/chat response and sync Redux cart when the cart agent returns items. */
+function appendAssistantMessagesFromChatResponse(res, setMessages, dispatch) {
+  const cartAgent = getChatCartAgentBlock(res)
+  if (cartAgent) {
+    if (cartAgent.data.items?.length) {
+      dispatch(setCart(cartAgent.data.items))
+    }
+    const lines = chatCartLinesFromAgentItems(cartAgent.data.items)
+    setMessages((m) => [
+      ...m,
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: cartAgent.message || "Your cart",
+        cartItems: lines,
+        cartTotal: cartAgent.data.totalPrice,
+        suggestions: cartAgent.suggestions ?? [],
+      },
+    ])
+    return
+  }
+  const checkoutReady = getCheckoutReadyBlock(res)
+  if (checkoutReady && checkoutReady.data?.razorpayOrderId && checkoutReady.data?.keyId && checkoutReady.data?.orderId) {
+    setMessages((m) => [
+      ...m,
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: checkoutReady.message || "Proceed to payment.",
+        checkoutReady: checkoutReady.data,
+        suggestions: checkoutReady.suggestions ?? [],
+      },
+    ])
+    return
+  }
+  const productBlock = getProductListBlock(res)
+  if (productBlock && productBlock.products.length > 0) {
+    setMessages((m) => [
+      ...m,
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: productBlock.message || "Here are some products.",
+        products: productBlock.products,
+        suggestions: productBlock.suggestions,
+      },
+    ])
+    return
+  }
+  const reply = extractReplyText(res) || "No response from assistant."
+  const suggestions = extractSuggestionsFromResponse(res)
+  setMessages((m) => [
+    ...m,
+    {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      text: reply,
+      ...(suggestions.length > 0 ? { suggestions } : {}),
+    },
+  ])
+}
+
 export default function HomeChat() {
   const dispatch = useDispatch()
+  const store = useStore()
   const navigate = useNavigate()
   const panelId = useId()
   const [open, setOpen] = useState(false)
@@ -361,6 +463,7 @@ export default function HomeChat() {
   const [orderId, setOrderId] = useState("")
   const [shippingAddressRaw, setShippingAddressRaw] = useState("")
   const [detailLoadingId, setDetailLoadingId] = useState(null)
+  const [razorpayBusy, setRazorpayBusy] = useState(false)
   const listRef = useRef(null)
 
   const handleChatAddToCart = useCallback(
@@ -378,7 +481,21 @@ export default function HomeChat() {
         productId: id,
         quantity: 1,
       })
-      console.log("[chat] add to cart response", chatRes)
+
+      const checkoutReady = getCheckoutReadyBlock(chatRes)
+      if (checkoutReady?.data?.razorpayOrderId && checkoutReady.data?.keyId && checkoutReady.data?.orderId) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: checkoutReady.message || "Proceed to payment.",
+            checkoutReady: checkoutReady.data,
+            suggestions: checkoutReady.suggestions ?? [],
+          },
+        ])
+        return
+      }
 
       const cartAgent = getChatCartAgentBlock(chatRes)
 
@@ -386,10 +503,11 @@ export default function HomeChat() {
       try {
         const cartRes = await getCart()
         list = parseCartListFromResponse(cartRes)
-        dispatch(setCart(list))
       } catch (e) {
         console.error("[chat] getCart after add to cart failed", e)
       }
+      const merged = list.length ? list : cartAgent?.data?.items ?? []
+      dispatch(setCart(merged))
 
       const cartItems = cartAgent
         ? chatCartLinesFromAgentItems(cartAgent.data.items)
@@ -474,24 +592,95 @@ export default function HomeChat() {
         return
       }
       if (/place\s*order/i.test(t)) {
-        setMessages((m) => [
-          ...m,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            text: "Complete your order below.",
-            showCheckoutEmbed: true,
-          },
-        ])
+        if (!getToken()) {
+          setBanner("Sign in to use the shopping assistant.")
+          return
+        }
+        setBanner(null)
+        const userEntry = { id: crypto.randomUUID(), role: "user", text: t }
+        setMessages((m) => [...m, userEntry])
+        void (async () => {
+          setSending(true)
+          try {
+            const res = await sendChatMessage({ message: "Place order" })
+            appendAssistantMessagesFromChatResponse(res, setMessages, dispatch)
+            const items = store.getState().cart.items
+            if (items.length > 0) {
+              setMessages((m) => [
+                ...m,
+                {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  text: "Complete your order below.",
+                  showCheckoutEmbed: true,
+                },
+              ])
+            }
+          } catch (err) {
+            const msg =
+              err?.response?.data?.message ??
+              err?.response?.data?.error ??
+              err?.message ??
+              "Something went wrong."
+            setMessages((m) => [
+              ...m,
+              { id: crypto.randomUUID(), role: "assistant", text: msg, isError: true },
+            ])
+          } finally {
+            setSending(false)
+          }
+        })()
         return
       }
       if (/continue\s*shopping/i.test(t)) {
         navigate("/home")
         return
       }
+      if (/complete\s*payment/i.test(t)) {
+        const payload = msg.checkoutReady
+        if (!payload?.razorpayOrderId || !payload?.keyId || !payload?.orderId) {
+          setBanner("Payment session missing. Run checkout from the assistant again.")
+          return
+        }
+        void (async () => {
+          setRazorpayBusy(true)
+          try {
+            await openRazorpayFromCheckoutReady(payload, verifyPayment)
+            dispatch(clearCart())
+            clearCartApi().catch(() => {})
+            setMessages((m) => [
+              ...m,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                text: "Payment successful. Your order is confirmed!",
+              },
+            ])
+          } catch (err) {
+            const errMsg =
+              err?.response?.data?.message ?? err?.message ?? "Payment could not be completed."
+            setMessages((m) => [
+              ...m,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                text: errMsg,
+                isError: true,
+              },
+            ])
+          } finally {
+            setRazorpayBusy(false)
+          }
+        })()
+        return
+      }
+      if (/view\s*order/i.test(t)) {
+        navigate("/home")
+        return
+      }
       setDraft(label)
     },
-    [navigate, openProductDetailInChat, setMessages],
+    [dispatch, navigate, openProductDetailInChat, setBanner, store],
   )
 
   const scrollToBottom = useCallback(() => {
@@ -533,48 +722,7 @@ export default function HomeChat() {
       }
 
       const res = await sendChatMessage(body)
-
-      const cartAgent = getChatCartAgentBlock(res)
-      if (cartAgent) {
-        const lines = chatCartLinesFromAgentItems(cartAgent.data.items)
-        setMessages((m) => [
-          ...m,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            text: cartAgent.message || "Your cart",
-            cartItems: lines,
-            cartTotal: cartAgent.data.totalPrice,
-            suggestions: cartAgent.suggestions ?? [],
-          },
-        ])
-      } else {
-        const productBlock = getProductListBlock(res)
-        if (productBlock && productBlock.products.length > 0) {
-          setMessages((m) => [
-            ...m,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              text: productBlock.message || "Here are some products.",
-              products: productBlock.products,
-              suggestions: productBlock.suggestions,
-            },
-          ])
-        } else {
-          const reply = extractReplyText(res) || "No response from assistant."
-          const suggestions = extractSuggestionsFromResponse(res)
-          setMessages((m) => [
-            ...m,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              text: reply,
-              ...(suggestions.length > 0 ? { suggestions } : {}),
-            },
-          ])
-        }
-      }
+      appendAssistantMessagesFromChatResponse(res, setMessages, dispatch)
     } catch (err) {
       const msg =
         err?.response?.data?.message ??
@@ -681,6 +829,7 @@ export default function HomeChat() {
                       msg={msg}
                       detailLoadingId={detailLoadingId}
                       onPick={handleSuggestionPick}
+                      disabledAll={razorpayBusy}
                     />
                   )}
                 </div>

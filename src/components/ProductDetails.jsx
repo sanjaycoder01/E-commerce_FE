@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux"
 import { ArrowLeft } from "lucide-react"
 import { getProductById, addCartItem } from "../services/api"
 import { addItem } from "../store/cartSlice"
+import { pickPrimaryImage } from "../utils/catalog"
 import Header from "./Header"
 
 function parseProduct(res) {
@@ -44,7 +45,7 @@ export default function ProductDetails() {
 
   const name = product?.name ?? product?.title ?? product?.productName ?? "Product"
   const price = product?.price ?? product?.priceAmount ?? 0
-  const image = product?.image ?? product?.img ?? product?.imageUrl ?? product?.thumbnail ?? ""
+  const image = product ? pickPrimaryImage(product) : ""
   const category = product?.category ?? product?.subcategory ?? product?.type ?? ""
   const description = product?.description ?? product?.desc ?? ""
 
