@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { createBrowserRouter, RouterProvider, Outlet, Navigate, useLocation } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Outlet, useLocation } from 'react-router-dom'
 import './App.css'
 import LoginForm from './components/login'
 import SignupForm from './components/signup'
@@ -7,6 +7,7 @@ import HomePage from './components/home'
 import ProductDetails from './components/ProductDetails'
 import BagPage from './components/BagPage'
 import CheckoutPage from './components/CheckoutPage'
+import { RequireAuth, GuestOnly, IndexRedirect } from './components/RequireAuth'
 
 function RootLayout() {
   const { pathname } = useLocation()
@@ -38,13 +39,23 @@ const router = createBrowserRouter([
     path: '/',
     element: <RootLayout />,
     children: [
-      { index: true, element: <Navigate to="/login" replace /> },
-      { path: 'home', element: <HomePage /> },
-      { path: 'login', element: <LoginForm /> },
-      { path: 'signup', element: <SignupForm /> },
-      { path: 'product/:id', element: <ProductDetails /> },
-      { path: 'bag', element: <BagPage /> },
-      { path: 'checkout', element: <CheckoutPage /> },
+      { index: true, element: <IndexRedirect /> },
+      {
+        element: <GuestOnly />,
+        children: [
+          { path: 'login', element: <LoginForm /> },
+          { path: 'signup', element: <SignupForm /> },
+        ],
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: 'home', element: <HomePage /> },
+          { path: 'product/:id', element: <ProductDetails /> },
+          { path: 'bag', element: <BagPage /> },
+          { path: 'checkout', element: <CheckoutPage /> },
+        ],
+      },
     ],
   },
 ])

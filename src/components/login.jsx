@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { Zap, Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react'
 import api, { setToken } from '../services/api'
@@ -17,6 +17,7 @@ const LoginForm = () => {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const navigate = useNavigate()
+  const location = useLocation()
   const dispatch = useDispatch()
 
   const handleSubmit = async (e) => {
@@ -34,7 +35,12 @@ const LoginForm = () => {
         const name = rawUser.name ?? ([rawUser.firstName, rawUser.lastName].filter(Boolean).join(' ') || rawUser.email)
         dispatch(setUser({ name, email: rawUser.email ?? email, id: rawUser._id ?? rawUser.id, ...rawUser }))
       }
-      navigate('/home')
+      const from = location.state?.from
+      const to =
+        from && typeof from === 'object' && typeof from.pathname === 'string'
+          ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
+          : '/home'
+      navigate(to, { replace: true })
     } catch (err) {
       const msg =
         err?.response?.data?.message ??
@@ -143,7 +149,7 @@ const LoginForm = () => {
                     onChange={(e) => setRemember(e.target.checked)}
                     className="peer sr-only"
                   />
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-600 bg-zinc-800/80 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-lime-400/40 peer-checked:border-lime-500/60 peer-checked:bg-lime-500/15 peer-checked:[&_svg]:opacity-100">
+                  {/* <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-600 bg-zinc-800/80 transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-lime-400/40 peer-checked:border-lime-500/60 peer-checked:bg-lime-500/15 peer-checked:[&_svg]:opacity-100">
                     <svg
                       className="h-3 w-3 text-lime-400 opacity-0 transition-opacity"
                       viewBox="0 0 12 12"
@@ -158,8 +164,8 @@ const LoginForm = () => {
                         strokeLinejoin="round"
                       />
                     </svg>
-                  </span>
-                  <span className="text-sm text-zinc-400">Keep me signed in</span>
+                  </span> */}
+                  {/* <span className="text-sm text-zinc-400">Keep me signed in</span> */}
                 </label>
                 <Link
                   to="/forgot-password"
